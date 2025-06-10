@@ -1,0 +1,124 @@
+services:
+  nginx:
+    container_name: nginx
+    build:
+      context: ./requirements/nginx
+    depends_on:
+      wordpress:
+        condition: service_healthy
+    env_file:
+      - .env
+    ports:
+      - "443:443"
+    volumes:
+      - wordpress_data:/var/www/html
+    restart: unless-stopped
+    networks:
+      - network
+
+  wordpress:
+    container_name: wordpress
+    build:
+      context: ./requirements/wordpress
+    depends_on:
+      - mariadb
+    env_file:
+      - .env
+    volumes:
+      - wordpress_data:/var/www/html
+    restart: unless-stopped
+    networks:
+      - network
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z localhost 9000"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    build:
+      context: ./requirements/redis
+    container_name: redis
+    expose:
+      - "6379"
+    networks:
+      - network
+    restart: unless-stopped
+
+  mariadb:
+    container_name: mariadb
+    build:
+      context: ./requirements/mariadb
+    env_file:
+      - .env
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    restart: unless-stopped 
+    networks:
+      - network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  sftp:
+    build:
+      context: ./requirements/ftp
+    container_name: sftp
+    ports:
+      - "2222:22"
+    volumes:
+      - wordpress_data:/var/www/html
+    networks:
+      - network
+    restart: unless-stopped
+  
+  adminer:
+    build:
+      context: ./requirements/adminer
+    ports:
+      - "8080:8080"
+    networks:
+      - network
+    restart: unless-stopped
+
+  uptimekuma:
+    build:
+      context: ./requirements/uptimekuma
+    container_name: uptimekuma
+    env_file:
+      - .env
+    ports:
+      - "3001:3001"
+    depends_on:
+      - "mariadb"
+    volumes:
+      - uptimekuma_data:/app/data
+    networks:
+      - network
+    restart: unless-stopped
+
+networks:
+  network:
+    driver: bridge
+
+volumes:
+  mariadb_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: /home/${LOGIN}/data/mysql
+      o: bind
+  wordpress_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: /home/${LOGIN}/data/wordpress
+      o: bind
+  uptimekuma_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: /home/${LOGIN}/data/uptimekuma
+      o: bind
